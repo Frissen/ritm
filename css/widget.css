@@ -1,0 +1,280 @@
+/* ============================================================
+   widget.css — компактный виджет «Ритм» для рабочего стола
+   ============================================================ */
+
+html, body.w-body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body.w-body {
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--ink);
+  user-select: none;
+  cursor: default;
+}
+
+body.w-body::after { opacity: .3; }
+
+.w-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Шапка ---------- */
+
+.w-top {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.w-date {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.w-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.w-ring {
+  position: relative;
+  width: 78px;
+  height: 78px;
+  flex: 0 0 auto;
+}
+
+.w-ring .ring-bg { stroke: var(--line); }
+.w-ring .ring-fg { transition: stroke-dashoffset .8s var(--ease); }
+
+.w-ring-num {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+}
+
+.w-ring-num span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: 1px;
+}
+
+.w-figures { min-width: 0; }
+
+.w-count {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  line-height: 1.15;
+}
+
+.w-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.w-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  padding: 3px 9px 3px 7px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ---------- Список ---------- */
+
+.w-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 10px 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.w-list::-webkit-scrollbar { width: 8px; }
+.w-list::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: var(--r-pill);
+  border: 2px solid var(--bg);
+}
+.w-list::-webkit-scrollbar-track { background: transparent; }
+
+.w-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  margin: 0 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+
+.w-row:hover { background: var(--surface); border-color: var(--line); }
+.w-row:active { transform: scale(.985); }
+
+.w-ico {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.w-mid {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.w-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.w-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.w-check {
+  flex: 0 0 auto;
+  min-width: 27px;
+  height: 27px;
+  padding: 0 7px;
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--line-strong);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface);
+  transition: all var(--t-fast) var(--ease);
+}
+
+.w-row.is-done .w-check {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
+}
+
+.w-row.is-done .w-name { color: var(--muted); }
+
+.w-row.is-part .w-check {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.w-row.is-done .w-ico { opacity: .55; }
+
+.w-pulse { animation: w-pop .38s var(--ease-back); }
+@keyframes w-pop {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.14); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- Подвал ---------- */
+
+.w-foot {
+  flex: 0 0 auto;
+  padding: 10px 14px 13px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.w-open {
+  width: 100%;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+
+.w-open:hover { filter: brightness(1.07); }
+.w-open:active { transform: scale(.98); }
+
+/* ---------- Пустые состояния ---------- */
+
+.w-empty {
+  padding: 26px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.w-empty b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--ink);
+  margin-bottom: 5px;
+}
+
+.w-empty p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.w-ok-all {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ok);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .w-pulse { animation: none; }
+}

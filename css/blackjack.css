@@ -1,0 +1,235 @@
+/* ============================================================
+   blackjack.css — раздел «Блэкджек»
+   Игровой стол, карты, панели ставки/статистики/истории.
+   ============================================================ */
+
+.bj {
+  --felt-1: #2E6B4F;
+  --felt-2: #1E4A38;
+  --card-ink: #1C1813;
+  --card-red: #C6361B;
+  --card-face: #FCFAF4;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 322px;
+  gap: var(--gutter);
+  align-items: start;
+}
+html[data-theme="dark"] .bj {
+  --felt-1: #1C4433;
+  --felt-2: #123024;
+  --card-face: #EFE9DB;
+}
+
+/* ---------- Стол ---------- */
+
+.bj__table { padding: 0; overflow: hidden; }
+.bj-table__inner {
+  display: grid;
+  gap: 14px;
+  padding: clamp(14px, 2.4vw, 26px);
+  min-height: 420px;
+  align-content: space-between;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(255, 255, 255, .1), transparent 60%),
+    linear-gradient(170deg, var(--felt-1), var(--felt-2));
+  color: #F3EFE4;
+}
+
+.bj-seat { display: grid; gap: 10px; }
+.bj-seat__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bj-seat__label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  opacity: .85;
+}
+
+.bj-score {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: rgba(0, 0, 0, .28);
+  border: 1px solid rgba(255, 255, 255, .18);
+}
+.bj-score em { font-style: normal; opacity: .7; font-size: 11px; }
+.bj-score.is-21 { background: rgba(212, 168, 66, .36); border-color: rgba(212, 168, 66, .6); }
+.bj-score.is-bust { background: rgba(198, 54, 27, .5); border-color: rgba(255, 255, 255, .3); }
+
+/* ---------- Рука и карты ---------- */
+
+.bj-hand { display: flex; flex-wrap: wrap; gap: 8px; min-height: 84px; }
+.bj-hand--empty { align-items: center; color: rgba(243, 239, 228, .6); font-size: 13px; }
+
+.bj-card {
+  position: relative;
+  width: 56px;
+  height: 80px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--card-face);
+  border: 1px solid rgba(0, 0, 0, .28);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .3);
+  color: var(--card-ink);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  padding: 5px 5px 3px;
+  animation: bj-deal .28s var(--ease) both;
+}
+@keyframes bj-deal {
+  from { opacity: 0; transform: translateY(-14px) rotate(-6deg); }
+  to   { opacity: 1; transform: none; }
+}
+.bj-card.is-red { color: var(--card-red); }
+
+.bj-card__r { font-family: var(--font-display); font-weight: 700; font-size: 16px; line-height: 1; }
+.bj-card__s {
+  justify-self: end;
+  align-self: end;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.bj-card.is-back {
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, .16) 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, .16) 0 6px, transparent 6px 12px),
+    linear-gradient(160deg, #C6361B, #8E2413);
+  border-color: rgba(0, 0, 0, .4);
+}
+
+/* ---------- Сообщение и банк ---------- */
+
+.bj-msg {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: var(--r-pill);
+  background: rgba(0, 0, 0, .22);
+  border: 1px solid rgba(255, 255, 255, .14);
+  color: rgba(243, 239, 228, .92);
+}
+.bj-msg--win  { background: rgba(63, 143, 92, .45);  border-color: rgba(140, 220, 165, .5); }
+.bj-msg--lose { background: rgba(198, 54, 27, .45);  border-color: rgba(255, 170, 150, .45); }
+.bj-msg--push { background: rgba(212, 168, 66, .38); border-color: rgba(240, 214, 150, .5); }
+
+.bj-pot {
+  text-align: center;
+  font-size: 13px;
+  color: rgba(243, 239, 228, .78);
+}
+.bj-pot b { font-family: var(--font-mono); color: #fff; font-size: 15px; }
+
+/* ---------- Правая колонка ---------- */
+
+.bj__side { display: grid; gap: 14px; align-content: start; }
+.bj-panel h3, .bj-bank h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  letter-spacing: -.01em;
+}
+
+.bj-bank__val {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.bj-bank__val span { font-size: 13px; font-weight: 500; color: var(--muted); }
+
+/* ---------- Ставка и управление ---------- */
+
+.bj-controls { display: grid; gap: 10px; }
+.bj-betrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.bj-chip {
+  flex: 1 1 auto;
+  min-width: 46px;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 8px 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.bj-chip:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
+.bj-chip[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.bj-chip:disabled { opacity: .4; cursor: not-allowed; }
+
+.bj-betline { font-size: 13px; color: var(--muted); }
+.bj-betline b { color: var(--ink); font-family: var(--font-mono); }
+
+.bj-act { width: 100%; }
+.bj-controls .btn + .btn { margin-top: 0; }
+
+/* ---------- Статистика ---------- */
+
+.bj-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.bj-stat {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+  padding: 9px 4px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.bj-stat b { font-family: var(--font-display); font-size: 19px; line-height: 1; }
+.bj-stat span { font-size: 10.5px; color: var(--muted); }
+
+/* ---------- История ---------- */
+
+.bj-hist { display: grid; gap: 3px; }
+.bj-empty { color: var(--muted); font-size: 13px; margin: 0; }
+.bj-hist__row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  background: var(--surface-2);
+}
+.bj-hist__r { font-weight: 600; }
+.bj-hist__row--win .bj-hist__r, .bj-hist__row--blackjack .bj-hist__r { color: var(--ok); }
+.bj-hist__row--lose .bj-hist__r { color: var(--danger); }
+.bj-hist__row--push .bj-hist__r { color: var(--muted); }
+.bj-hist__s { font-family: var(--font-mono); color: var(--muted); }
+.bj-hist__n { font-family: var(--font-mono); font-weight: 600; }
+
+/* ---------- Адаптив ---------- */
+
+@media (max-width: 1080px) {
+  .bj { grid-template-columns: 1fr; }
+  .bj__side { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .bj-table__inner { min-height: 340px; }
+  .bj-card { width: 46px; height: 66px; }
+  .bj-card__r { font-size: 14px; }
+  .bj-card__s { font-size: 18px; }
+  .bj-stats { grid-template-columns: repeat(2, 1fr); }
+}

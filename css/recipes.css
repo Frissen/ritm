@@ -1,0 +1,124 @@
+/* ============================================================
+   recipes.css — раздел «Рецепты»
+   Каталог блюд, фильтры, избранное.
+   ============================================================ */
+
+.rc { display: grid; gap: var(--gutter); }
+
+/* ---------- Панель фильтров ---------- */
+
+.rc-toolbar {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+}
+.rc-toolbar__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rc-search { flex: 1 1 240px; min-width: 180px; }
+.rc-flab {
+  flex: 0 0 108px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.rc-count { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+
+/* ---------- Сетка карточек ---------- */
+
+.rc-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
+}
+
+.rc-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.rc-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+.rc-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.rc-card__ico {
+  width: 56px; height: 56px;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  margin-bottom: 12px;
+}
+
+.rc-star {
+  position: absolute;
+  top: 12px; right: 12px;
+  width: 36px; height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  font-size: 21px;
+  line-height: 1;
+  color: var(--line-strong);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.rc-star:hover { color: var(--gold); transform: scale(1.12); }
+.rc-star.is-on { color: var(--gold); }
+
+.rc-card__title { font-size: 16px; margin: 0 0 4px; padding-right: 34px; }
+.rc-card__cat { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+.rc-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* ---------- Детали рецепта (модальное окно) ---------- */
+
+.rc-recipe__meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+.rc-recipe h4 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.rc-ing, .rc-steps { margin: 0 0 20px; padding-left: 20px; display: grid; gap: 7px; }
+.rc-steps { padding-left: 22px; }
+.rc-ing li, .rc-steps li { font-size: 14px; line-height: 1.5; }
+.rc-ing li::marker { color: var(--accent); }
+
+/* ---------- Адаптив ---------- */
+
+@media (max-width: 700px) {
+  .rc-flab { flex-basis: 100%; }
+  .rc-toolbar { padding: 16px; }
+}
+
+@media (max-width: 520px) {
+  .rc-grid { grid-template-columns: 1fr; }
+}

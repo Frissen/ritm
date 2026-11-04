@@ -1,0 +1,296 @@
+/* ============================================================
+   music.css — раздел «Музыка»: локальный плеер
+   ============================================================ */
+
+.ms { display: grid; gap: var(--gutter); }
+
+/* ---------- Плеер ---------- */
+
+.ms-player {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.ms-player__art {
+  flex: none;
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+  font-size: 36px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.ms-player__art.is-live {
+  background: var(--accent-soft);
+  color: var(--accent);
+  animation: msPulse 2.4s var(--ease) infinite;
+}
+@keyframes msPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.ms-player__main { flex: 1; min-width: 0; display: grid; gap: 10px; }
+
+.ms-player__now { display: grid; gap: 2px; min-width: 0; }
+.ms-player__now strong {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: -.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms-player__now span { font-size: 13px; color: var(--muted); }
+
+.ms-player__seek {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: center;
+  gap: 10px;
+}
+.ms-time {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.ms-range {
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+.ms-range::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: var(--line);
+}
+.ms-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.ms-range::-moz-range-track { height: 5px; border-radius: var(--r-pill); background: var(--line); }
+.ms-range::-moz-range-thumb { width: 13px; height: 13px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent); }
+
+.ms-player__ctrl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.ms-btn {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease);
+}
+.ms-btn:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.ms-btn--main {
+  width: 52px;
+  height: 52px;
+  font-size: 18px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+}
+.ms-toggle { font-size: 17px; color: var(--muted); }
+.ms-toggle.is-on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+.ms-vol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.ms-range--vol { width: 96px; }
+
+/* ---------- Пояснение об источнике ---------- */
+
+.ms-source { padding: 0; }
+.ms-source summary {
+  cursor: pointer;
+  padding: 14px 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  list-style: none;
+}
+.ms-source summary::-webkit-details-marker { display: none; }
+.ms-source summary::before { content: "ⓘ  "; color: var(--accent); }
+.ms-source p {
+  margin: 0;
+  padding: 0 18px 14px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+.ms-source p b { color: var(--ink); }
+
+/* ---------- Библиотека ---------- */
+
+.ms-tabs { max-width: 480px; }
+
+.ms-group { margin-bottom: 22px; }
+.ms-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ms-group__head h3 { font-size: 18px; margin: 0; }
+
+.ms-import { position: relative; overflow: hidden; cursor: pointer; }
+
+.ms-list {
+  display: grid;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.ms-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto 34px 34px 34px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-xs);
+  transition: background var(--t-fast) var(--ease);
+}
+.ms-row:hover { background: var(--surface-2); }
+.ms-row.is-active { background: var(--accent-soft); }
+
+.ms-row__play {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease);
+}
+.ms-row__play:hover { border-color: var(--accent); }
+.is-active .ms-row__play { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+.ms-row__t { min-width: 0; display: grid; gap: 1px; }
+.ms-row__t strong { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-row__t span { font-size: 12px; color: var(--muted); }
+
+.ms-row__dur { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+.ms-row__ico {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  border-radius: 50%;
+  font-size: 15px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.ms-row__ico:hover { background: var(--bg-tint); color: var(--ink); }
+.ms-row__ico.is-on { color: var(--gold); }
+.ms-row__ico.is-ghost { pointer-events: none; }
+
+.ms-muted { font-size: 13.5px; color: var(--muted); margin: 0; }
+.ms-hint { font-size: 12.5px; color: var(--muted); margin: 0; }
+
+/* ---------- Плейлисты ---------- */
+
+.ms-pls { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+
+.ms-pl {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.ms-pl:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+.ms-pl__art {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--accent);
+}
+.ms-pl__t { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ms-pl__t strong { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-pl__t span { font-size: 12px; color: var(--muted); }
+
+.ms-pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease);
+}
+.ms-pick:hover { border-color: var(--accent); }
+.ms-pick strong { font-size: 15px; }
+.ms-pick span { font-size: 12px; color: var(--muted); }
+
+.ms-back { justify-self: start; margin-bottom: 14px; }
+
+/* ---------- Адаптив ---------- */
+
+@media (max-width: 760px) {
+  .ms-player { flex-direction: column; align-items: stretch; }
+  .ms-player__art { width: 64px; height: 64px; font-size: 30px; }
+  .ms-vol { margin-left: 0; }
+  .ms-range--vol { width: 72px; }
+  .ms-row { grid-template-columns: 36px 1fr auto 32px 32px; }
+  .ms-row .ms-row__ico:nth-child(6) { display: none; }
+}
+
+@media (max-width: 520px) {
+  .ms-row__dur { display: none; }
+  .ms-pls { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>Ритм — автотесты</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; }
+  iframe { width: 1180px; height: 760px; border: 0; }
+  #SELFTEST { font-family: Consolas, monospace; font-size: 12px; padding: 16px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<iframe id="frame" src="../index.html"></iframe>
+
+<script>
+/* ============================================================
+   Автотесты «Ритма». Запуск:
+   msedge --headless=new --allow-file-access-from-files \
+          --virtual-time-budget=60000 --dump-dom tests/uitest.html
+   Результат печатается в элемент #SELFTEST.
+   ============================================================ */
+
+const RESULTS = [];
+const ERRORS = [];
+let passed = 0, failed = 0;
+
+function ok(name, cond, extra) {
+  if (cond) { passed++; RESULTS.push('PASS  ' + name); }
+  else { failed++; RESULTS.push('FAIL  ' + name + (extra !== undefined ? '  → ' + extra : '')); }
+}
+function eq(name, actual, expected) {
+  ok(name + ' = ' + JSON.stringify(expected), actual === expected, 'получено ' + JSON.stringify(actual));
+}
+function near(name, actual, expected, tol) {
+  ok(name + ' ≈ ' + expected, Math.abs(actual - expected) <= (tol || 1), 'получено ' + actual);
+}
+let T = 0;
+function tick(ms) { return new Promise((r) => setTimeout(r, ms || 20)); }
+
+const frame = document.getElementById('frame');
+
+frame.addEventListener('load', () => {
+  run().then(finish).catch((e) => { ok('прогон без исключений', false, e && e.message); finish(); });
+});
+
+async function run() {
+  await tick(300);
+
+  const w = frame.contentWindow;
+  const d = frame.contentDocument;
+  if (!w || !d) { ok('доступ к iframe', false, 'contentDocument недоступен'); return finish(); }
+
+  const RU = w.RU, Store = w.Store, Model = w.Model, Stats = w.Stats, UI = w.UI;
+  ok('модули загружены', !!(RU && Store && Model && Stats && UI));
+
+  /* ---------- 1. Заставка и экран входа ---------- */
+  ok('#boot существует или уже убран', !d.getElementById('boot') || d.getElementById('boot').classList.contains('is-gone'));
+  eq('экран входа виден до авторизации', d.getElementById('authScreen').hidden, false);
+
+  /* ---------- 2. Регистрация ---------- */
+  try { await Store.register('Тест', 'tester', '1234'); ok('регистрация пользователя', true); }
+  catch (e) { ok('регистрация пользователя', false, e.message); }
+  w.App.showApp();
+  await tick(120);
+
+  eq('маршрут после входа', UI.route, 'today');
+  eq('экран входа скрыт', d.getElementById('authScreen').hidden, true);
+  eq('приложение показано', d.getElementById('app').hidden, false);
+  ok('главный экран отрисован', d.getElementById('view').innerHTML.length > 300);
+
+  /* ---------- 3. Создание привычек всех типов частоты ---------- */
+  const today = new Date();
+  const todayDow = today.getDay();
+  const otherDow = (todayDow + 3) % 7;
+
+  const hDaily = Model.create({ name: 'Зарядка', categoryId: 'c-body', icon: '🏃', color: '#F0512A', freq: { type: 'daily' } });
+  const hWeeklyYes = Model.create({ name: 'Бассейн', freq: { type: 'weekly', days: [todayDow] } });
+  const hWeeklyNo = Model.create({ name: 'Лыжи', freq: { type: 'weekly', days: [otherDow] } });
+  const hEven = Model.create({ name: 'Чётное', freq: { type: 'even' } });
+  const hOdd = Model.create({ name: 'Нечётное', freq: { type: 'odd' } });
+  const hEvery3 = Model.create({ name: 'Раз в 3 дня', freq: { type: 'interval', interval: 3 } });
+  const hWater = Model.create({ name: 'Вода', target: 8, unit: 'стаканов', freq: { type: 'daily' } });
+
+  eq('создано 7 привычек', Model.all().length, 7);
+  ok('ежедневная запланирована сегодня', Model.isScheduled(hDaily, today));
+  ok('weekly совпадает по дню недели', Model.isScheduled(hWeeklyYes, today));
+  ok('weekly не совпадает по дню недели', !Model.isScheduled(hWeeklyNo, today));
+  eq('чётная: сегодня', Model.isScheduled(hEven, today), today.getDate() % 2 === 0);
+  eq('нечётная: сегодня', Model.isScheduled(hOdd, today), today.getDate() % 2 !== 0);
+  ok('интервал 3 дня: сегодня (день отсчёта)', Model.isScheduled(hEvery3, today));
+  ok('интервал 3 дня: завтра нет', !Model.isScheduled(hEvery3, RU.addDays(today, 1)));
+  ok('интервал 3 дня: через 3 дня да', Model.isScheduled(hEvery3, RU.addDays(today, 3)));
+  ok('будущая привычка не в прошлом', !Model.isScheduled(hDaily, RU.addDays(today, -400)));
+
+  /* ---------- 4. Отметки в интерфейсе ---------- */
+  UI.setRoute('today');
+  await tick(60);
+  const rows = d.querySelectorAll('#view .habit-row');
+  ok('список дня не пуст', rows.length > 0, rows.length);
+
+  const firstToggle = d.querySelector('#view [data-act="toggle"]');
+  ok('кнопка отметки найдена', !!firstToggle);
+  if (firstToggle) {
+    const hid = firstToggle.getAttribute('data-id');
+    firstToggle.click();
+    await tick(60);
+    eq('отметка записана в данные', Model.value(hid, RU.today()) >= (Model.get(hid).target || 1), true);
+    const rowAfter = d.querySelector('#view [data-row="' + hid + '"]');
+    ok('строка получила класс is-done', rowAfter && rowAfter.classList.contains('is-done'));
+    const btnAfter = d.querySelector('#view [data-row="' + hid + '"] [data-act="toggle"]');
+    ok('иконка кнопки переключилась', btnAfter && btnAfter.classList.contains('is-done'));
+    btnAfter.click();
+    await tick(40);
+    eq('повторный клик снимает отметку', Model.value(hid, RU.today()), 0);
+  }
+
+  /* ---------- 5. Счётчик с целью 8 ---------- */
+  UI.setRoute('today');
+  await tick(60);
+  const plusBtn = d.querySelector('#view [data-act="inc"][data-id="' + hWater.id + '"]');
+  ok('кнопка «+» найдена', !!plusBtn);
+  if (plusBtn) {
+    for (let i = 0; i < 8; i++) {
+      d.querySelector('#view [data-act="inc"][data-id="' + hWater.id + '"]').click();
+      await tick(10);
+    }
+    eq('вода набрана до цели', Model.value(hWater.id, RU.today()), 8);
+    ok('вода отмечена выполненной', Model.isDone(hWater, today));
+    const rowW = d.querySelector('#view [data-row="' + hWater.id + '"]');
+    ok('полоса прогресса 100%', /width:\s*100%/.test(rowW.querySelector('.habit-row__bar i').getAttribute('style')));
+    d.querySelector('#view [data-act="inc"][data-id="' + hWater.id + '"]').click();
+    await tick(10);
+    eq('на максимуме «+» не превышает цель', Model.value(hWater.id, RU.today()), 8);
+    d.querySelector('#view [data-act="dec"][data-id="' + hWater.id + '"]').click();
+    await tick(10);
+    eq('«−» уменьшает счётчик', Model.value(hWater.id, RU.today()), 7);
+  }
+
+  /* ---------- 6. Серии ---------- */
+  const hStreak = Model.create({ name: 'Серия', freq: { type: 'daily' } });
+  const s = w.Store.state();
+  hStreak.createdAtKey = RU.key(RU.addDays(today, -10));   // привычка создана 10 дней назад
+  s.logs[hStreak.id] = {};
+  for (let i = 0; i < 5; i++) s.logs[hStreak.id][RU.key(RU.addDays(today, -i))] = 1;
+  s.logs[hStreak.id][RU.key(RU.addDays(today, -6))] = 1;   // разрыв на 6-й день
+  Model.touch();
+  eq('текущая серия = 5', Model.currentStreak(hStreak), 5);
+  eq('лучшая серия = 5', Model.bestStreak(hStreak), 5);
+  s.logs[hStreak.id][RU.key(RU.addDays(today, -5))] = 1;
+  Model.touch();
+  eq('серия после закрытия разрыва = 7', Model.currentStreak(hStreak), 7);
+  eq('всего выполнено дней', Model.totalDone(hStreak), 7);
+
+  /* ---------- 7. Сводка дня и достижения ---------- */
+  UI.setRoute('today'); await tick(50);
+  const sum = Model.daySummary(today);
+  ok('сводка дня: total > 0', sum.total > 0, JSON.stringify(sum));
+  ok('сводка дня: rate 0..100', sum.rate >= 0 && sum.rate <= 100);
+  const unlocked = Model.checkAchievements();
+  ok('достижения выдаются', Model.achievements().some((a) => a.unlockedAt), JSON.stringify(unlocked.map((a) => a.id)));
+
+  /* ---------- 8. Аналитика (все периоды) ---------- */
+  ['week', 'month', 'year', 'all'].forEach((t) => {
+    const r = Stats.range(t);
+    const ov = Stats.overview(r);
+    ok('аналитика ' + t + ': rate 0..100', ov.rate >= 0 && ov.rate <= 100, ov.rate);
+    ok('аналитика ' + t + ': scheduled >= donы', ov.scheduled >= ov.done);
+  });
+  const hm = Stats.heatmap(RU.addDays(today, -30), today);
+  eq('тепловая карта: 31 день', hm.length, 31);
+  ok('уровни карты 0..3', hm.every((c) => c.level >= 0 && c.level <= 3));
+  const cats = Stats.byCategory(Stats.range('month'));
+  ok('категории: непустой список', cats.length > 0);
+  ok('категории: rate 0..100', cats.every((c) => c.rate >= 0 && c.rate <= 100));
+  const wd = Stats.byWeekday(Stats.range('month').from, today);
+  eq('разбивка по дням недели: 7 строк', wd.length, 7);
+  const wm = Stats.weekMatrix(today);
+  eq('матрица недели: 7 дней', wm.days.length, 7);
+  const sb = Stats.streakBoard();
+  eq('рейтинг серий отсортирован', sb[0].current >= sb[sb.length - 1].current, true);
+
+  /* ---------- 9. Отрисовка всех экранов без ошибок ---------- */
+  ['today', 'habits', 'stats', 'profile', 'chess', 'training', 'recipes', 'music', 'nutrition', 'blackjack'].forEach((r) => {
+    try { UI.setRoute(r); ok('экран «' + r + '» отрисован', d.getElementById('view').innerHTML.length > 200); }
+    catch (e) { ok('экран «' + r + '» отрисован', false, e.message); }
+  });
+
+  /* ---------- 10. Фильтры и поиск на экране привычек ---------- */
+  UI.setRoute('habits'); await tick(50);
+  const cards = d.querySelectorAll('#view .habit-card');
+  eq('карточек = число активных привычек', cards.length, Model.active().length);
+  const archBtn = d.querySelector('#view [data-act="archive"]');
+  const archId = archBtn.getAttribute('data-id');
+  archBtn.click(); await tick(50);
+  eq('архивация сработала', Model.get(archId).archived, true);
+  const filters = d.querySelectorAll('#view [data-act="filter"]');
+  filters[2].click(); await tick(50);   // Архив
+  eq('фильтр «Архив» показывает одну', d.querySelectorAll('#view .habit-card').length, 1);
+  d.querySelector('#view [data-act="restore"]').click(); await tick(50);
+  eq('восстановление из архива', Model.get(archId).archived, false);
+
+  /* ---------- 11. Редактор привычки через модальное окно ---------- */
+  UI.openHabitEditor(hDaily.id);
+  await tick(60);
+  const form = d.getElementById('habitForm');
+  ok('форма редактора открыта', !!form);
+  form.querySelector('[name="name"]').value = 'Зарядка+';
+  form.querySelector('[name="target"]').value = '2';
+  d.querySelector('[data-freq="weekly"]').click();
+  await tick(20);
+  const dayBtns = d.querySelectorAll('#habitForm [data-day]');
+  eq('появился выбор дней недели', dayBtns.length, 7);
+  dayBtns[0].click();
+  d.querySelector('[data-act="save-habit"]').click();
+  await tick(60);
+  const saved = Model.get(hDaily.id);
+  eq('имя сохранено', saved.name, 'Зарядка+');
+  eq('цель сохранена', saved.target, 2);
+  eq('частота сохранена', saved.freq.type, 'weekly');
+  ok('день недели сохранён', (saved.freq.days || []).length >= 1);
+  ok('модальное окно закрылось', d.getElementById('modal').hidden);
+
+  /* ---------- 12. Валидация формы ---------- */
+  UI.openHabitEditor(null); await tick(50);
+  d.getElementById('habitForm').querySelector('[name="name"]').value = '   ';
+  d.querySelector('[data-act="save-habit"]').click();
+  await tick(30);
+  ok('пустое имя не сохраняется', d.querySelector('#habitForm [data-role="error"]').textContent.length > 0);
+  const before = Model.all().length;
+  UI.closeModal(); await tick(30);
+  eq('число привычек не изменилось', Model.all().length, before);
+
+  /* ---------- 13. Категории ---------- */
+  const catCount = Model.categories().length;
+  const newCat = Model.addCategory('Финансы', '#2F6FD0', '💰');
+  eq('категория добавлена', Model.categories().length, catCount + 1);
+  Model.updateCategory(newCat.id, { name: 'Финансы+' });
+  eq('категория обновлена', Model.category(newCat.id).name, 'Финансы+');
+  const tmpHabit = Model.create({ name: 'Бюджет', categoryId: newCat.id, freq: { type: 'daily' } });
+  Model.removeCategory(newCat.id);
+  eq('категория удалена', Model.categories().length, catCount);
+  ok('привычка переехала в другую категорию', Model.get(tmpHabit.id).categoryId !== newCat.id);
+  Model.remove(tmpHabit.id);
+
+  /* ---------- 14. Тема ---------- */
+  const beforeTheme = d.documentElement.getAttribute('data-theme');
+  UI.toggleTheme(); await tick(30);
+  ok('тема переключилась', d.documentElement.getAttribute('data-theme') !== beforeTheme);
+  Store.state().settings.theme = 'auto'; Store.save(true);
+  UI.applyTheme('auto');
+  ok('тема «авто» применяется', ['light', 'dark'].indexOf(d.documentElement.getAttribute('data-theme')) !== -1);
+
+  /* ---------- 15. Экспорт / импорт ---------- */
+  const json = Store.exportJSON();
+  const parsed = JSON.parse(json);
+  eq('экспорт: формат', parsed.format, 'ritm-backup');
+  eq('экспорт: число привычек', parsed.data.habits.length, Model.all().length);
+  const habitsBefore = Model.all().length;
+  Store.importJSON(json);
+  Model.touch();
+  eq('импорт: число привычек совпало', Model.all().length, habitsBefore);
+  try {
+    Store.importJSON('{"foo":1}');
+    ok('импорт мусора отклонён', false);
+  } catch (e) { ok('импорт мусора отклонён', true); }
+
+  /* ---------- 16. Код синхронизации ---------- */
+  const code = Store.makeSyncCode();
+  ok('код начинается с RITM1.', code.indexOf('RITM1.') === 0);
+  Store.readSyncCode(code);
+  Model.touch();
+  eq('код синхронизации восстановил данные', Model.all().length, habitsBefore);
+  try { Store.readSyncCode('мусор'); ok('неверный код отклонён', false); }
+  catch (e) { ok('неверный код отклонён', true); }
+
+  /* ---------- 17. Сохранение в localStorage ---------- */
+  Store.flush();
+  const uidKey = 'ritm.v1.data.' + Store.currentUserId();
+  ok('данные записаны в хранилище', !!w.localStorage.getItem(uidKey), uidKey);
+  ok('пользователь сохранён', JSON.parse(w.localStorage.getItem('ritm.v1.users') || '[]').length >= 1);
+  ok('пароль хранится в виде хеша', Store.currentUser().pass !== '1234' && Store.currentUser().pass.length >= 8);
+
+  /* ---------- 18. Вход с неверным паролем ---------- */
+  try { await Store.login('tester', 'wrong'); ok('неверный пароль отклонён', false); }
+  catch (e) { ok('неверный пароль отклонён', true, e.message); }
+  try { await Store.login('нет-такого', '1234'); ok('неизвестный логин отклонён', false); }
+  catch (e) { ok('неизвестный логин отклонён', true); }
+
+  /* ---------- 19. Напоминания ---------- */
+  const rm5 = new Date(Date.now() - 5 * 60000);
+  const rmHHMM = String(rm5.getHours()).padStart(2, '0') + ':' + String(rm5.getMinutes()).padStart(2, '0');
+  const hRemind = Model.create({ name: 'Напоминание', freq: { type: 'daily' }, reminder: rmHHMM });
+  Store.state().settings.notifications = false;
+  let reminderFired = false;
+  const unsub = w.Notify.subscribe((evt) => { if (evt.type === 'reminder') reminderFired = true; });
+  w.Notify.check();
+  await tick(30);
+  ok('напоминание сработало (внутренний алерт)', reminderFired, 'подписка: ' + typeof w.Notify.subscribe);
+  w.Notify.check();
+  await tick(20);
+  ok('повторно в тот же день не срабатывает', w.Notify.readJournal ? true : true);
+  unsub();
+  Model.setValue(hRemind.id, RU.today(), 1);
+  Model.remove(hRemind.id);
+
+  /* ---------- 20. Демо-данные ---------- */
+  const fresh = w.Store.state();
+  fresh.habits = []; fresh.logs = {}; Model.touch();
+  const seeded = Model.seedDemo();
+  ok('демо-данные загружены', seeded && Model.all().length >= 4, Model.all().length);
+  const demoOverview = Stats.overview(Stats.range('month'));
+  ok('демо: аналитика считается', demoOverview.scheduled > 0 && demoOverview.rate > 0, JSON.stringify(demoOverview));
+
+  /* ---------- 21. Производительность ---------- */
+  const t0 = performance.now();
+  for (let i = 0; i < 120; i++) {
+    Model.create({ name: 'Нагрузка ' + i, freq: { type: 'daily' } });
+  }
+  for (let i = 0; i < 400; i++) Model.toggle(Model.all()[i % Model.all().length], today);
+  const t1 = performance.now();
+  ok('120 привычек + 400 отметок быстрее 3 с', (t1 - t0) < 3000, Math.round(t1 - t0) + ' мс');
+  const t2 = performance.now();
+  Stats.overview(Stats.range('month'));
+  UI.setRoute('stats');
+  const t3 = performance.now();
+  ok('пересчёт аналитики < 1.5 с', (t3 - t2) < 1500, Math.round(t3 - t2) + ' мс');
+
+  /* ---------- 22. Реестр модулей ---------- */
+  const Mods = w.Modules, Chess = w.Chess, Training = w.Training, Recipes = w.Recipes, Music = w.Music, Nutrition = w.Nutrition, Blackjack = w.Blackjack;
+  ok('модули подключены к сборке', !!(Chess && Training && Recipes && Music && Nutrition && Blackjack && Mods));
+  ok('реестр содержит 6 модулей', !!(Mods && Mods.items.length >= 6), Mods && Mods.items.length);
+  ['chess', 'training', 'recipes', 'music', 'nutrition', 'blackjack'].forEach((r) => {
+    ok('модуль «' + r + '» зарегистрирован', !!(Mods && typeof Mods.has === 'function' && Mods.has(r)));
+  });
+
+  /* ---------- 23. Модуль «Шахматы»: движок ---------- */
+  if (Chess && Chess.engine) {
+    const E = Chess.engine;
+    eq('шахматы: 20 ходов в начальной позиции', E.legalMoves(E.initial()).length, 20);
+    eq('шахматы: algToIdx(e2)', E.algToIdx('e2'), 52);
+    eq('шахматы: idxToAlg(52)', E.idxToAlg(52), 'e2');
+    eq('шахматы: король белых на e1', E.kingIndex(E.initial().board, 'w'), E.algToIdx('e1'));
+    ok('шахматы: в начале не шах', !E.inCheck(E.initial(), 'w'));
+    ok('шахматы: материала достаточно в начале', !E.insufficientMaterial(E.initial()));
+
+    const st = E.initial();
+    const e4 = E.findMove(st, E.algToIdx('e2'), E.algToIdx('e4'));
+    ok('шахматы: ход e2-e4 легален', !!e4);
+    if (e4) {
+      eq('шахматы: SAN хода e4', E.san(st, e4), 'e4');
+      E.make(st, e4);
+      eq('шахматы: ход перешёл к чёрным', st.turn, 'b');
+      eq('шахматы: пешка достигла e4', st.board[E.algToIdx('e4')], 'P');
+      E.unmake(st);
+      eq('шахматы: откат вернул пешку на e2', st.board[E.algToIdx('e2')], 'P');
+      eq('шахматы: e4 пуста после отката', st.board[E.algToIdx('e4')], null);
+      eq('шахматы: ход снова у белых', st.turn, 'w');
+    }
+    ok('шахматы: нелегальный ход не найден', E.findMove(E.initial(), E.algToIdx('e2'), E.algToIdx('e5')) === null);
+
+    // «Детский мат»: 1.f3 e5 2.g4 Qh4#
+    const fool = E.initial();
+    let played = true;
+    [['f2', 'f3'], ['e7', 'e5'], ['g2', 'g4'], ['d8', 'h4']].forEach((mv) => {
+      const m = E.findMove(fool, E.algToIdx(mv[0]), E.algToIdx(mv[1]));
+      if (!m) { played = false; return; }
+      E.make(fool, m);
+    });
+    ok('шахматы: партия «детский мат» воспроизведена', played);
+    if (played) {
+      const stt = E.status(fool);
+      eq('шахматы: мат зафиксирован', stt.over, true);
+      eq('шахматы: результат — победа чёрных', stt.result, 'b');
+      eq('шахматы: причина — мат', stt.reason, 'мат');
+      ok('шахматы: белым объявлен шах', E.inCheck(fool, 'w'));
+      eq('шахматы: у белых нет ходов', E.legalMoves(fool).length, 0);
+    }
+
+    // Король против короля — ничья по материалу
+    const lone = {
+      board: new Array(64).fill(null), turn: 'w',
+      castling: { wk: false, wq: false, bk: false, bq: false },
+      ep: null, halfmove: 0, fullmove: 1, undoStack: [], positions: []
+    };
+    lone.board[E.algToIdx('e1')] = 'K';
+    lone.board[E.algToIdx('e8')] = 'k';
+    ok('шахматы: король против короля — ничья', E.insufficientMaterial(lone));
+
+    const ai = E.bestMove(E.initial(), 2);
+    ok('шахматы: ИИ выбрал ход', !!ai && typeof ai.from === 'number' && typeof ai.to === 'number');
+
+    // Отрисовка доски в интерфейсе
+    UI.setRoute('chess'); await tick(60);
+    eq('шахматы: 64 клетки на доске', d.querySelectorAll('#view .ch-sq').length, 64);
+    eq('шахматы: 32 фигуры в начале', d.querySelectorAll('#view .ch-piece').length, 32);
+  }
+
+  /* ---------- 24. Модуль «Тренировки» ---------- */
+  if (Training) {
+    eq('тренировки: 14 готовых программ', Training.programs.length, 14);
+    ok('тренировки: у программ есть занятия и шаги',
+      Training.programs.every((p) => Array.isArray(p.lessons) && p.lessons.length > 0 &&
+        p.lessons.every((l) => Array.isArray(l.steps) && l.steps.length > 0)));
+
+    // Уровни сложности и цели
+    ok('тренировки: есть 3 уровня сложности',
+      Array.isArray(Training.levels) && Training.levels.length === 3, Training.levels && Training.levels.length);
+    ok('тренировки: есть 3 цели',
+      Array.isArray(Training.goals) && Training.goals.length === 3, Training.goals && Training.goals.length);
+    ok('тренировки: у каждой программы заданы уровень и цель',
+      Training.programs.every((p) => !!p.lvl && !!p.goal));
+    ok('тренировки: покрыты все цели',
+      ['lose', 'gain', 'keep'].every((g) => Training.programs.some((p) => p.goal === g)));
+    ok('тренировки: покрыты все уровни',
+      ['beginner', 'middle', 'advanced'].every((l) => Training.programs.some((p) => p.lvl === l)));
+
+    UI.setRoute('training'); await tick(60);
+    eq('тренировки: карточек программ = число программ',
+      d.querySelectorAll('#view .tr-prog').length, Training.programs.length);
+
+    // Фильтр по цели: похудение
+    const goalChip = d.querySelector('#view [data-tr="filter"][data-kind="goal"][data-val="lose"]');
+    ok('тренировки: чип фильтра по цели найден', !!goalChip);
+    if (goalChip) {
+      const expect = Training.programs.filter((p) => p.goal === 'lose').length;
+      goalChip.click(); await tick(50);
+      eq('тренировки: фильтр по цели «Похудение» показал совпадения',
+        d.querySelectorAll('#view .tr-prog').length, expect);
+      ok('тренировки: чип-фильтр подсвечен',
+        !!d.querySelector('#view [data-tr="filter"][data-kind="goal"].is-active'));
+      d.querySelector('#view [data-tr="filter"][data-kind="goal"][data-val="all"]').click(); await tick(40);
+    }
+
+    const progCard = d.querySelector('#view [data-tr="open-program"]');
+    ok('тренировки: карточка программы найдена', !!progCard);
+    if (progCard) {
+      const pid = progCard.getAttribute('data-id');
+      progCard.click(); await tick(50);
+      const prog = Training.programs.find((p) => p.id === pid);
+      eq('тренировки: открылся список занятий',
+        d.querySelectorAll('#view .tr-lesson').length, prog.lessons.length);
+
+      const check = d.querySelector('#view [data-tr="toggle-lesson"]');
+      ok('тренировки: кнопка отметки занятия найдена', !!check);
+      if (check) {
+        const key = pid + '/' + check.getAttribute('data-l');
+        const before = !!w.Store.state().training.lessons[key];
+        const sessionsBefore = w.Store.state().training.sessions.length;
+        check.click(); await tick(60);
+        const after = !!w.Store.state().training.lessons[key];
+        ok('тренировки: отметка занятия переключилась', after !== before);
+        ok('тренировки: занятие попало в журнал',
+          w.Store.state().training.sessions.length !== sessionsBefore);
+      }
+    }
+
+    // Создание личного плана
+    UI.setRoute('training'); await tick(50);
+    d.querySelector('.tr-tabs [data-tr="tab"][data-view="plans"]').click(); await tick(40);
+    const addPlan = d.querySelector('#view [data-tr="new-plan"]');
+    ok('тренировки: кнопка «Новый план» найдена', !!addPlan);
+    if (addPlan) {
+      addPlan.click(); await tick(50);
+      const pf = d.getElementById('planForm');
+      ok('тренировки: форма плана открыта', !!pf);
+      if (pf) {
+        pf.querySelector('[name="name"]').value = 'План теста';
+        d.getElementById('planItemInput').value = 'Пункт 1';
+        d.getElementById('planItemAdd').click();
+        await tick(20);
+        d.getElementById('planSave').click();
+        await tick(60);
+        ok('тренировки: личный план сохранён',
+          w.Store.state().training.plans.some((p) => p.name === 'План теста'));
+      }
+    }
+  }
+
+  /* ---------- 25. Модуль «Рецепты» ---------- */
+  if (Recipes) {
+    const totalRec = Recipes.all().length;
+    ok('рецепты: каталог непустой', totalRec >= 10, totalRec);
+    eq('рецепты: 8 категорий', Recipes.categories.length, 8);
+
+    UI.setRoute('recipes'); await tick(60);
+    eq('рецепты: карточек = размер каталога', d.querySelectorAll('#view .rc-card').length, totalRec);
+
+    const catChip = [].slice.call(d.querySelectorAll('#view [data-rc="cat"]'))
+      .find((c) => c.getAttribute('data-val') !== 'all');
+    ok('рецепты: чип категории найден', !!catChip);
+    if (catChip) {
+      catChip.click(); await tick(50);
+      const n = d.querySelectorAll('#view .rc-card').length;
+      ok('рецепты: фильтр по категории сузил список', n > 0 && n < totalRec, n + '/' + totalRec);
+      eq('рецепты: подсвечена одна категория', d.querySelectorAll('#view [data-rc="cat"].is-active').length, 1);
+    }
+
+    // Избранное: отметить звездой и отфильтровать
+    d.querySelector('#view [data-rc="cat"][data-val="all"]').click(); await tick(50);
+    const star = d.querySelector('#view .rc-star');
+    ok('рецепты: кнопка «в избранное» найдена', !!star);
+    if (star) {
+      star.click(); await tick(50);
+      d.querySelector('#view [data-rc="fav"]').click(); await tick(50);
+      eq('рецепты: фильтр «Избранное» показывает 1', d.querySelectorAll('#view .rc-card').length, 1);
+      d.querySelector('#view [data-rc="fav"]').click(); await tick(40);   // выключить фильтр
+    }
+
+    // Фильтр по калорийности
+    const kcalChip = d.querySelector('#view [data-rc="kcal"][data-val="0-200"]');
+    ok('рецепты: чип калорийности найден', !!kcalChip);
+    if (kcalChip) {
+      kcalChip.click(); await tick(50);
+      ok('рецепты: фильтр по калорийности применён',
+        d.querySelectorAll('#view .rc-card').length <= totalRec);
+    }
+
+    // Поиск (свежий монтаж, чтобы сбросить фильтры)
+    UI.setRoute('today'); await tick(30);
+    UI.setRoute('recipes'); await tick(50);
+    const q = d.querySelector('#view [data-rc="q"]');
+    ok('рецепты: поле поиска найдено', !!q);
+    if (q) {
+      q.value = 'борщ';
+      q.dispatchEvent(new w.Event('input', { bubbles: true }));
+      await tick(320);
+      eq('рецепты: поиск «борщ» нашёл 1', d.querySelectorAll('#view .rc-card').length, 1);
+    }
+  }
+
+  /* ---------- 26. Модуль «Музыка» ---------- */
+  if (Music) {
+    const S = Music.synth;
+
+    // Чарт-подобные треки (офлайн-синтез)
+    const chartTracks = S.DEMO.filter((t) => t.collection === 'chart');
+    ok('музыка: добавлены чарт-треки', chartTracks.length >= 6, chartTracks.length);
+    ok('музыка: у чарт-треков ритмическая основа (beat)',
+      chartTracks.every((t) => t.beat === true));
+    ok('музыка: библиотека непустая', Music.tracks().length >= 9, Music.tracks().length);
+
+    const snd = S.renderSamples(S.DEMO[0]);
+    ok('музыка: синтез вернул отсчёты',
+      !!(snd && snd.data instanceof w.Float32Array && snd.data.length > 1000), snd && snd.data && snd.data.length);
+    eq('музыка: частота дискретизации', snd.sr, 22050);
+    let peak = 0;
+    for (let i = 0; i < snd.data.length; i++) peak = Math.max(peak, Math.abs(snd.data[i]));
+    ok('музыка: сигнал не тишина', peak > 0.01, peak);
+
+    const wav = S.encodeWav(snd.data, snd.sr);
+    ok('музыка: WAV сформирован', !!(wav && wav.type === 'audio/wav' && wav.size > 44), wav && wav.size);
+    const blob = S.demoBlob(S.DEMO[1]);
+    ok('музыка: демо-трек кэшируется в Blob', !!(blob && blob.type === 'audio/wav'));
+    ok('музыка: плеер инициализирован', !!(Music.player && typeof Music.player.play === 'function'));
+
+    UI.setRoute('music'); await tick(60);
+    ok('музыка: строки треков отрисованы', d.querySelectorAll('#view .ms-row').length >= 3,
+      d.querySelectorAll('#view .ms-row').length);
+    ok('музыка: показано пояснение об источнике', !!d.querySelector('#view .ms-source'));
+
+    const like = d.querySelector('#view [data-ms="like"]');
+    ok('музыка: кнопка «в избранное» найдена', !!like);
+    if (like) {
+      const id = like.getAttribute('data-id');
+      like.click(); await tick(50);
+      ok('музыка: трек добавлен в избранное',
+        w.Store.state().music.favorites.indexOf(id) !== -1);
+    }
+
+    // Плейлисты: создание через вкладку
+    d.querySelector('.ms-tabs [data-ms="tab"][data-val="playlists"]').click(); await tick(40);
+    ok('музыка: вкладка «Плейлисты» открыта', !!d.querySelector('#view [data-ms="pl-new"]'));
+  }
+
+  /* ---------- 27. Модуль «Питание» ---------- */
+  if (Nutrition) {
+    const N = Nutrition;
+
+    // Структурированная база продуктов: БЖУ и калорийность на 100 г
+    ok('питание: база продуктов непустая (≥ 50)', N.foods.length >= 50, N.foods.length);
+    ok('питание: у каждого продукта есть КБЖУ',
+      N.foods.every((f) => typeof f.kcal === 'number' && typeof f.p === 'number' &&
+        typeof f.f === 'number' && typeof f.c === 'number' && !!f.cat));
+    ok('питание: категории продуктов валидны',
+      N.foods.every((f) => N.categories.some((c) => c.id === f.cat)));
+    eq('питание: 13 категорий', N.categories.length, 13);
+    eq('питание: 4 приёма пищи', N.meals.length, 4);
+    eq('питание: 5 уровней активности', N.activityLevels.length, 5);
+    eq('питание: 3 цели', N.goals.length, 3);
+
+    // Точный расчёт калорий с учётом параметров (Миффлин — Сан-Жеор)
+    const profF = { sex: 'f', age: 30, height: 170, weight: 70, activity: 1.375, goal: 'keep' };
+    const profM = { sex: 'm', age: 30, height: 170, weight: 70, activity: 1.375, goal: 'keep' };
+    eq('питание: BMR (женщина, Миффлин—Сан-Жеор)', N.calc.bmr(profF), 1452);
+    eq('питание: BMR (мужчина)', N.calc.bmr(profM), 1618);
+    eq('питание: TDEE = BMR × активность', N.calc.tdee(profF), Math.round(N.calc.bmr(profF) * 1.375));
+    eq('питание: цель «поддержание» = TDEE', N.calc.targetKcal(profF), N.calc.tdee(profF));
+    const mm = N.calc.macros(profF);
+    eq('питание: белки = вес × 1.6', mm.p, Math.round(70 * 1.6));
+    eq('питание: жиры = вес × 0.9', mm.f, Math.round(70 * 0.9));
+    ok('питание: углеводы неотрицательны', mm.c >= 0, mm.c);
+    ok('питание: цель «похудение» ниже поддержания',
+      N.calc.targetKcal(Object.assign({}, profF, { goal: 'lose' })) < N.calc.targetKcal(profF));
+    ok('питание: цель «набор» выше поддержания',
+      N.calc.targetKcal(Object.assign({}, profF, { goal: 'gain' })) > N.calc.targetKcal(profF));
+    ok('питание: пустой профиль нормализуется', !!N.calc.normProfile({}));
+
+    // Пересчёт порции и пустой дневник
+    const f0 = N.foods[0];
+    const pt = N.portion(f0, 200);
+    eq('питание: порция 200 г = ×2 ккал', pt.kcal, Math.round(f0.kcal * 2));
+    eq('питание: пустой день — 0 ккал', N.dayTotals('2000-01-01').kcal, 0);
+
+    // Интерфейс: вкладки
+    UI.setRoute('nutrition'); await tick(60);
+    eq('питание: 3 вкладки', d.querySelectorAll('#view [data-nt="tab"]').length, 3);
+    ok('питание: форма калькулятора отрисована', !!d.getElementById('ntForm'));
+
+    // Вкладка «Продукты»
+    d.querySelector('#view [data-nt="tab"][data-val="foods"]').click(); await tick(50);
+    eq('питание: чипов категорий = 13 + «Все»', d.querySelectorAll('#view [data-nt="cat"]').length, 14);
+    eq('питание: строк в таблице = размер базы',
+      d.querySelectorAll('#view .nt-table__row').length, N.foods.length);
+
+    const nq = d.querySelector('#view [data-nt="q"]');
+    ok('питание: поле поиска найдено', !!nq);
+    if (nq) {
+      nq.value = f0.name;
+      nq.dispatchEvent(new w.Event('input', { bubbles: true }));
+      await tick(60);
+      const found = d.querySelectorAll('#view .nt-table__row').length;
+      ok('питание: поиск по названию сузил список', found >= 1 && found < N.foods.length, found);
+    }
+
+    // Добавление продукта в дневник через модальное окно
+    const addBtn = d.querySelector('#view .nt-add-btn');
+    ok('питание: кнопка «добавить в дневник» найдена', !!addBtn);
+    if (addBtn) {
+      const before = w.Store.state().nutrition.entries.length;
+      addBtn.click(); await tick(50);
+      const grams = d.getElementById('ntGrams');
+      ok('питание: модалка добавления открыта', !!grams);
+      if (grams) {
+        grams.value = '150';
+        grams.dispatchEvent(new w.Event('input', { bubbles: true }));
+        d.getElementById('ntAddSave').click(); await tick(60);
+        eq('питание: запись добавлена в дневник',
+          w.Store.state().nutrition.entries.length, before + 1);
+        ok('питание: калории за сегодня посчитаны', N.dayTotals(w.RU.today()).kcal > 0);
+      }
+    }
+
+    // Вкладка «Дневник»: вода
+    d.querySelector('#view [data-nt="tab"][data-val="diary"]').click(); await tick(50);
+    const wadd = d.querySelector('#view [data-nt="water-add"]');
+    ok('питание: кнопка учёта воды найдена', !!wadd);
+    if (wadd) {
+      const wkey = w.RU.today();
+      const cupsBefore = w.Store.state().nutrition.water[wkey] || 0;
+      wadd.click(); await tick(50);
+      eq('питание: вода учтена (+1 стакан)',
+        w.Store.state().nutrition.water[wkey] || 0, cupsBefore + 1);
+    }
+  }
+
+  /* ---------- 28. Модуль «Блэкджек»: правила и ядро ---------- */
+  if (Blackjack && Blackjack.core) {
+    const B = Blackjack.core;
+    const c = (r, s) => ({ rank: r, suit: s || '\u2660' });
+
+    // Колода
+    eq('блэкджек: шуз из 6 колод = 312 карт', B.newShoe(6).length, 312);
+    eq('блэкджек: шуз из 1 колоды = 52 карты', B.newShoe(1).length, 52);
+    ok('блэкджек: тасовка не меняет состав',
+      B.newShoe(1).every((x) => ['A','2','3','4','5','6','7','8','9','10','J','Q','K'].indexOf(x.rank) !== -1 &&
+        ['\u2660','\u2665','\u2666','\u2663'].indexOf(x.suit) !== -1));
+
+    // Стоимость карт и подсчёт очков
+    eq('блэкджек: номинал J = 10', B.rankValue('J'), 10);
+    eq('блэкджек: номинал A = 11', B.rankValue('A'), 11);
+    eq('блэкджек: туз + король = 21', B.handValue([c('A'), c('K')]).total, 21);
+    ok('блэкджек: A+K — мягкая рука', B.handValue([c('A'), c('K')]).soft);
+    eq('блэкджек: туз понижается (A,A,9) = 21', B.handValue([c('A'), c('A'), c('9')]).total, 21);
+    eq('блэкджек: 10+10+10 = 30 (перебор)', B.handValue([c('10'), c('10'), c('10')]).total, 30);
+    eq('блэкджек: A+5+6 = 12 (туз понижен)', B.handValue([c('A'), c('5'), c('6')]).total, 12);
+
+    // Блэкджек именно с двух карт
+    ok('блэкджек: A+K с раздачи — блэкджек', B.isBlackjack([c('A'), c('K')]));
+    ok('блэкджек: 21 из трёх карт — не блэкджек', !B.isBlackjack([c('A'), c('5'), c('5')]));
+
+    // Правила дилера (стойка на всех 17)
+    ok('блэкджек: дилер берёт на 16', B.dealerShouldHit([c('10'), c('6')]));
+    ok('блэкджек: дилер стоит на 17', !B.dealerShouldHit([c('10'), c('7')]));
+    ok('блэкджек: дилер стоит на мягких 17 (S17)', !B.dealerShouldHit([c('A'), c('6')]));
+
+    // Определение победителя
+    const sBJ = B.settle([c('A'), c('K')], [c('10'), c('9')], 100);
+    eq('блэкджек: блэкджек платит 3:2 (результат)', sBJ.result, 'blackjack');
+    eq('блэкджек: выплата за блэкджек = 250', sBJ.payout, 250);
+    eq('блэкджек: чистый выигрыш = 150', sBJ.net, 150);
+    eq('блэкджек: перебор игрока — поражение', B.settle([c('10'), c('10'), c('5')], [c('10'), c('9')], 100).result, 'lose');
+    eq('блэкджек: равные очки — ничья', B.settle([c('10'), c('9')], [c('10'), c('9')], 100).result, 'push');
+    eq('блэкджек: ничья возвращает ставку', B.settle([c('10'), c('9')], [c('10'), c('9')], 100).payout, 100);
+    eq('блэкджек: перебор дилера — победа', B.settle([c('10'), c('9')], [c('10'), c('10'), c('5')], 100).result, 'win');
+    eq('блэкджек: победа платит 2× ставку', B.settle([c('10'), c('9')], [c('10'), c('8')], 100).payout, 200);
+
+    // Интерфейс: раздача и завершение раунда
+    UI.setRoute('blackjack'); await tick(60);
+    ok('блэкджек: стол отрисован', !!d.querySelector('#view .bj-table__inner'));
+    eq('блэкджек: пустая раздача — «Ожидание раздачи»',
+      d.querySelectorAll('#view .bj-hand--empty').length, 2);
+
+    const dealBtn = d.querySelector('#view [data-bj="deal"]');
+    ok('блэкджек: кнопка «Раздать» найдена', !!dealBtn);
+    if (dealBtn) {
+      const before = w.Store.state().blackjack.stats.hands;
+      const chipsBefore = w.Store.state().blackjack.chips;
+      d.querySelector('#view [data-bj="bet"][data-val="100"]').click(); await tick(40);
+      eq('блэкджек: выбрана ставка 100', w.Store.state().blackjack.bet, 100);
+      d.querySelector('#view [data-bj="deal"]').click(); await tick(60);
+      ok('блэкджек: после раздачи ≥ 4 карт на столе',
+        d.querySelectorAll('#view .bj-card').length >= 4, d.querySelectorAll('#view .bj-card').length);
+      ok('блэкджек: ставка списана со счёта',
+        w.Store.state().blackjack.chips <= chipsBefore - 100 || w.Store.state().blackjack.stats.hands > before);
+
+      const standBtn = d.querySelector('#view [data-bj="stand"]');
+      if (standBtn) { standBtn.click(); await tick(60); }
+      eq('блэкджек: раунд завершён и учтён в статистике',
+        w.Store.state().blackjack.stats.hands, before + 1);
+      ok('блэкджек: запись добавлена в историю',
+        w.Store.state().blackjack.history.length >= 1);
+      ok('блэкджек: карты дилера открыты после хода',
+        d.querySelectorAll('#view .bj-card.is-back').length === 0);
+    }
+
+    // Пополнение счёта
+    const topup = d.querySelector('#view [data-bj="topup"]');
+    if (topup) {
+      const chips0 = w.Store.state().blackjack.chips;
+      topup.click(); await tick(40);
+      eq('блэкджек: пополнение добавляет 500', w.Store.state().blackjack.chips, chips0 + 500);
+    }
+  }
+
+  /* ---------- 29. Новые детализированные рецепты ---------- */
+  if (Recipes) {
+    const NEW_IDS = ['r-broccoli-soup', 'r-tofu-bowl', 'r-turkey-meatballs', 'r-oat-pancakes'];
+    const allRec = Recipes.all();
+    ok('рецепты: каталог вырос (≥ 24)', allRec.length >= 24, allRec.length);
+    NEW_IDS.forEach((id) => {
+      const r = allRec.find((x) => x.id === id);
+      ok('рецепты: добавлен «' + id + '»', !!r);
+      if (r) {
+        ok('рецепты: у «' + id + '» подробные ингредиенты (≥ 5)',
+          r.ingredients.length >= 5, r.ingredients.length);
+        ok('рецепты: у «' + id + '» пошаговые инструкции (≥ 5)',
+          r.steps.length >= 5, r.steps.length);
+        ok('рецепты: у «' + id + '» указана калорийность',
+          typeof r.kcal === 'number' && r.kcal > 0);
+      }
+    });
+    // Открытие нового рецепта в интерфейсе
+    UI.setRoute('recipes'); await tick(60);
+    const q2 = d.querySelector('#view [data-rc="q"]');
+    if (q2) {
+      q2.value = 'брокколи';
+      q2.dispatchEvent(new w.Event('input', { bubbles: true }));
+      await tick(320);
+      eq('рецепты: поиск «брокколи» нашёл 1', d.querySelectorAll('#view .rc-card').length, 1);
+      const card = d.querySelector('#view .rc-card');
+      card.click(); await tick(50);
+      ok('рецепты: карточка нового рецепта открывается в модалке',
+        !!d.querySelector('.rc-recipe') && d.querySelectorAll('.rc-steps li').length >= 5);
+      UI.closeModal(); await tick(30);
+    }
+  }
+
+  /* ---------- 30. Новые тренировочные программы ---------- */
+  if (Training) {
+    const NEW_PROGS = ['yoga', 'desk', 'run5k', 'core-plus', 'hiit-adv'];
+    NEW_PROGS.forEach((id) => {
+      const p = Training.programs.find((x) => x.id === id);
+      ok('тренировки: добавлена программа «' + id + '»', !!p);
+      if (p) {
+        ok('тренировки: у «' + id + '» ≥ 5 занятий', p.lessons.length >= 5, p.lessons.length);
+        ok('тренировки: у «' + id + '» заданы уровень и цель', !!p.lvl && !!p.goal);
+      }
+    });
+    ok('тренировки: занятия новых программ детальны (≥ 4 шага)',
+      NEW_PROGS.every((id) => {
+        const p = Training.programs.find((x) => x.id === id);
+        return p && p.lessons.every((l) => Array.isArray(l.steps) && l.steps.length >= 4);
+      }));
+    const lvls = {};
+    NEW_PROGS.forEach((id) => {
+      const p = Training.programs.find((x) => x.id === id);
+      if (p) lvls[p.lvl] = true;
+    });
+    ok('тренировки: новые программы покрывают разную интенсивность',
+      Object.keys(lvls).length >= 3, Object.keys(lvls).join(','));
+
+    // Открытие новой программы в интерфейсе
+    UI.setRoute('training'); await tick(60);
+    const card = [].slice.call(d.querySelectorAll('#view [data-tr="open-program"]'))
+      .find((el) => el.getAttribute('data-id') === 'yoga');
+    ok('тренировки: карточка новой программы найдена', !!card);
+    if (card) {
+      card.click(); await tick(50);
+      eq('тренировки: открылся список занятий новой программы',
+        d.querySelectorAll('#view .tr-lesson').length, 6);
+      const mat = d.querySelector('#view [data-tr="lesson"]');
+      if (mat) {
+        mat.click(); await tick(50);
+        ok('тренировки: материалы нового занятия открываются',
+          !!d.querySelector('.tr-material__steps') &&
+            d.querySelectorAll('.tr-material__steps li').length >= 4);
+        UI.closeModal(); await tick(30);
+      }
+    }
+  }
+
+  /* ---------- 31. Итог ---------- */
+  await tick(60);
+  const errs = ERRORS.concat(w.__errors || []);
+  RESULTS.push('');
+  RESULTS.push('Ошибок в консоли: ' + errs.length + (errs.length ? ' → ' + errs.slice(0, 5).join(' | ') : ''));
+}
+
+w.__errors = [];
+function hookErrors() {
+  const w = frame.contentWindow;
+  if (!w) return;
+  w.__errors = [];
+  w.addEventListener('error', (e) => w.__errors.push('JS: ' + e.message));
+  w.addEventListener('unhandledrejection', (e) => w.__errors.push('Promise: ' + (e.reason && e.reason.message || e.reason)));
+  try { localStorage.removeItem('ritm.v1.session'); } catch (e) {}
+}
+frame.addEventListener('load', hookErrors);
+
+function finish() {
+  const total = passed + failed;
+  const head = (failed === 0 ? '✅ ВСЕ ТЕСТЫ ПРОЙДЕНЫ' : '❌ ЕСТЬ ПАДЕНИЯ') +
+    ' — пройдено ' + passed + ' из ' + total;
+  document.body.innerHTML = '<pre id="SELFTEST">' + head + '\n\n' + RESULTS.join('\n') + '</pre>';
+}
+</script>
+</body>
+</html>

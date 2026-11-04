@@ -1,0 +1,309 @@
+/* ============================================================
+   chess.css — раздел «Шахматы»
+   Доска, фигуры, панели соперника, статистики и истории ходов.
+   ============================================================ */
+
+.ch {
+  --sq-light: #EFE7D7;
+  --sq-dark:  #C6B195;
+  --pc-w:     #FFFFFF;
+  --pc-b:     #2A241C;
+  --pc-edge:  #1A1712;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 322px;
+  gap: var(--gutter);
+  align-items: start;
+}
+html[data-theme="dark"] .ch {
+  --sq-light: #3B342B;
+  --sq-dark:  #241F19;
+  --pc-w:     #F3EDE0;
+  --pc-b:     #161310;
+  --pc-edge:  #060504;
+}
+
+/* ---------- Левая колонка ---------- */
+
+.ch__main { display: grid; gap: 14px; justify-items: center; }
+
+.ch__head {
+  width: 100%;
+  max-width: 568px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+}
+
+.ch__turn {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 19px;
+  letter-spacing: -.02em;
+}
+.ch__turn.is-check { color: var(--danger); }
+.ch__turn.is-think { color: var(--muted); }
+.ch__turn.is-over  { color: var(--accent); }
+
+.ch__eval {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 3px 12px;
+  white-space: nowrap;
+}
+
+/* ---------- Доска ---------- */
+
+.ch-board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  width: 100%;
+  max-width: 568px;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-md);
+  background: var(--sq-dark);
+  container-type: inline-size;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.ch-sq {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background-color: var(--sq-light);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  outline: none;
+}
+.ch-sq.is-dark { background-color: var(--sq-dark); }
+
+/* Подсветки подсвечиваются через background-image, чтобы комбинироваться
+   друг с другом и не перекрывать подложку клетки (раньше box-shadow
+   одной подсветки «съедал» другую). */
+.ch-sq.is-last { background-image: linear-gradient(rgba(240, 81, 42, .26), rgba(240, 81, 42, .26)); }
+.ch-sq.is-sel  { background-image: linear-gradient(rgba(240, 81, 42, .40), rgba(240, 81, 42, .40)); }
+.ch-sq.is-hint { box-shadow: inset 0 0 0 3px var(--teal); }
+
+.ch-sq.is-check::after {
+  content: "";
+  position: absolute;
+  inset: 6%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(198, 54, 27, .85), rgba(198, 54, 27, 0) 72%);
+  pointer-events: none;
+}
+
+/* маркеры доступных ходов */
+.ch-sq.is-move::before {
+  content: "";
+  position: absolute;
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  background: rgba(26, 23, 18, .26);
+  pointer-events: none;
+}
+html[data-theme="dark"] .ch-sq.is-move::before { background: rgba(246, 241, 231, .3); }
+
+.ch-sq.is-cap::before {
+  content: "";
+  position: absolute;
+  inset: 6%;
+  border-radius: 50%;
+  border: 4px solid rgba(198, 54, 27, .55);
+  pointer-events: none;
+}
+
+.ch-piece {
+  font-size: clamp(20px, 4.8vw, 42px);
+  line-height: 1;
+  pointer-events: none;
+  transform: translateY(-1px);
+  transition: transform var(--t-fast) var(--ease);
+}
+@supports (font-size: 1cqw) {
+  .ch-piece { font-size: 10.4cqw; }
+}
+.ch-sq:hover .ch-piece { transform: translateY(-2px) scale(1.04); }
+
+.ch-piece.is-w {
+  color: var(--pc-w);
+  text-shadow:
+    0 1px 0 var(--pc-edge), 0 -1px 0 var(--pc-edge),
+    1px 0 0 var(--pc-edge), -1px 0 0 var(--pc-edge),
+    0 2px 3px rgba(0, 0, 0, .35);
+}
+.ch-piece.is-b {
+  color: var(--pc-b);
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, .28), 0 -1px 0 rgba(255, 255, 255, .18),
+    0 2px 3px rgba(0, 0, 0, .3);
+}
+
+.ch-coord {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: clamp(7px, 1.5cqw, 10px);
+  font-weight: 600;
+  line-height: 1;
+  opacity: .55;
+  pointer-events: none;
+}
+.ch-coord--rank { top: 3px; left: 4px; }
+.ch-coord--file { bottom: 3px; right: 4px; }
+.ch-sq.is-light .ch-coord { color: var(--sq-dark); }
+.ch-sq.is-dark  .ch-coord { color: var(--sq-light); }
+
+/* ---------- Панель действий ---------- */
+
+.ch__bar {
+  width: 100%;
+  max-width: 568px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---------- Правая колонка ---------- */
+
+.ch__side { display: grid; gap: 14px; align-content: start; }
+
+.ch-panel h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  letter-spacing: -.01em;
+}
+.ch-panel .field { margin-bottom: 10px; }
+
+.ch-select {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  padding: 9px 12px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23857D6E' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 34px;
+}
+.ch-select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.ch-note {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.ch-note b { color: var(--ink-soft); }
+
+.ch-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ch-stat {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+  padding: 10px 6px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.ch-stat b { font-family: var(--font-display); font-size: 22px; line-height: 1; }
+.ch-stat span { font-size: 11px; color: var(--muted); }
+
+/* ---------- Взятые фигуры ---------- */
+
+.ch-cap { display: grid; gap: 6px; }
+.ch-cap__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.ch-cap__row--pieces {
+  min-height: 22px;
+  flex-wrap: wrap;
+  gap: 1px;
+  justify-content: flex-start;
+}
+.ch-cap__lab { font-weight: 600; color: var(--ink-soft); }
+.ch-cap__num { font-family: var(--font-mono); font-weight: 600; color: var(--ink-soft); }
+.ch-cap__p {
+  font-size: 17px;
+  line-height: 1;
+}
+.ch-cap__p.is-w { color: var(--ink-soft); }
+.ch-cap__p.is-b { color: var(--muted); opacity: .55; }
+.ch-cap__none { color: var(--muted); font-size: 12.5px; }
+
+/* ---------- История ходов ---------- */
+
+.ch-movelist {
+  max-height: 240px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  display: grid;
+  gap: 1px;
+}
+.ch-movelist__empty { color: var(--muted); font-family: var(--font-body); margin: 0; }
+.ch-mv__row {
+  display: grid;
+  grid-template-columns: 34px 1fr 1fr;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+.ch-mv__row:nth-child(odd) { background: var(--surface-2); }
+.ch-mv__no { color: var(--muted); }
+.ch-mv__w, .ch-mv__b { color: var(--ink); }
+
+/* ---------- Превращение пешки (в модальном окне) ---------- */
+
+.ch-promo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.ch-promo__btn {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1 / 1;
+  font-size: 34px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.ch-promo__btn:hover { border-color: var(--accent); transform: translateY(-2px); }
+.ch-promo__btn .ch-piece { font-size: 34px; }
+
+/* ---------- Адаптив ---------- */
+
+@media (max-width: 1080px) {
+  .ch { grid-template-columns: 1fr; }
+  .ch__main { justify-items: center; }
+  .ch__head, .ch-board, .ch__bar { max-width: 520px; }
+}
+
+@media (max-width: 560px) {
+  .ch__turn { font-size: 17px; }
+  .ch__bar .btn { flex: 1 1 auto; }
+  .ch-board { border-radius: var(--r-xs); }
+}
