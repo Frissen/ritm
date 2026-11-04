@@ -1,0 +1,10 @@
+{
+  "appId": "com.frissen.ritm",
+  "appName": "Ritm",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "ios": {
+    "contentInset": "always",
+    "scrollEnabled": true
+  }
+}

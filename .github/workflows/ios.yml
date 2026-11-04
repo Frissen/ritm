@@ -1,0 +1,102 @@
+name: Build iOS IPA (unsigned)
+
+# Сборка неподписанного .ipa выполняется на macOS-раннере GitHub.
+# Установка на iPhone: Sideloadly или AltStore с вашим Apple ID
+# (бесплатный аккаунт — подпись живёт 7 дней, платный — год).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'capacitor-ios/**'
+      - 'js/**'
+      - 'css/**'
+      - 'index.html'
+      - 'sw.js'
+      - 'manifest.json'
+      - '.github/workflows/ios.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-ipa:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Copy web assets into www
+        run: |
+          mkdir -p capacitor-ios/www
+          cp -R index.html manifest.json sw.js icon.svg css js widget.html capacitor-ios/www/
+
+      - name: Install Capacitor dependencies
+        working-directory: capacitor-ios
+        run: npm install --no-audit --no-fund
+
+      - name: Add iOS platform
+        working-directory: capacitor-ios
+        run: npx cap add ios
+
+      - name: Sync web assets into iOS project
+        working-directory: capacitor-ios
+        run: npx cap sync ios
+
+      - name: Build unsigned archive
+        working-directory: capacitor-ios
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$PWD/build/App.xcarchive" \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            COMPILER_INDEX_STORE_ENABLE=NO
+
+      - name: Package IPA
+        run: |
+          APP_PATH="capacitor-ios/build/App.xcarchive/Products/Applications/App.app"
+          test -d "$APP_PATH" || { echo "App.app не найден"; exit 1; }
+          rm -rf package-ipa && mkdir -p package-ipa/Payload
+          cp -R "$APP_PATH" package-ipa/Payload/
+          cd package-ipa
+          zip -qry "../Ritm-unsigned.ipa" Payload
+          cd ..
+          ls -lh Ritm-unsigned.ipa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ritm-unsigned-ipa
+          path: Ritm-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Publish release with IPA
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ipa-${{ github.run_number }}
+          name: "Ритм — IPA (сборка #${{ github.run_number }})"
+          body: |
+            Неподписанный IPA приложения «Ритм» версии 1.4.
+
+            **Установка на iPhone:**
+            1. Скачайте `Ritm-unsigned.ipa` ниже.
+            2. Установите через Sideloadly или AltStore, войдя своим Apple ID.
+            3. На iPhone: Настройки → Основные → VPN и управление устройством → доверьтесь профилю разработчика.
+
+            Бесплатный Apple ID: подпись действует 7 дней, затем требуется переподпись.
+          files: Ritm-unsigned.ipa
+          draft: false
+          prerelease: false

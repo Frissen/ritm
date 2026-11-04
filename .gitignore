@@ -10,3 +10,12 @@ Thumbs.db
 # Пользовательские настройки редакторов
 .vscode/
 .idea/
+
+# iOS-обёртка (Capacitor): зависимости и сгенерированный Xcode-проект
+capacitor-ios/node_modules/
+capacitor-ios/ios/
+capacitor-ios/build/
+capacitor-ios/www/*
+!capacitor-ios/www/.gitkeep
+*.ipa
+
